@@ -1,0 +1,162 @@
+---
+title: "Project Code"
+author: "Zarah Aziz"
+date: "2023-03-10"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, comment="", echo=FALSE}
+library(knitr)
+library(tm)
+library(SnowballC)
+library(dplyr)
+library(shiny)
+library(tidytext)
+library(tokenizers)
+library(ggplot2)
+```
+
+
+## Loading US text data into R.
+
+Using the readLines function, I will read in the blogs, twitter, and news text files for US.
+
+```{r, comment="", echo=TRUE}
+setwd("~/Desktop/Career Pivot/DS Specialty Program/Capstone/Capstone Final Project/data")
+USblogs <- readLines("en_US.blogs.txt") #reading in US blog file.
+UStwitter <- readLines("en_US.twitter.txt") #reading in US twitter file.
+
+news <- file("en_US.news.txt", open="rb") #opening US news file connection.
+USnews <- readLines(news) # reading in US news txt file with special characters using readLines.
+close(news) # closing the news connection.
+rm(news) # removing news variable from environment.
+```
+
+Now, I will remove non-english text to reduce errors.
+
+```{r, comment=""}
+USblogs <- iconv(USblogs, "latin1", "ASCII", sub="") 
+USnews <- iconv(USnews, "latin1", "ASCII", sub="") 
+UStwitter <- iconv(UStwitter, "latin1", "ASCII", sub="") 
+```
+
+
+## Sampling from Data
+
+Now I will create a sample of my data, since the data is very large. To do this, I will use a coin-flip approach (the rbinom function) to randomly choose a subset of my data for exploration and analysis. I will use 1 percent of the raw data in my sampler function, and create a subset of about 0.1% of the raw data per each of the 3 text file types.
+
+```{r, comment=""}
+sampler <- function(data, percent) {
+  return(data[as.logical(rbinom(length(data),1,percent))])
+} #creating my sampler function.
+
+blogs1 <- sampler(USblogs, 0.1) #sampling from my data.
+news1 <- sampler(USnews, 0.1)
+twitter1 <- sampler(UStwitter, 0.1)
+
+dir.create("sample", showWarnings = FALSE) #creating a directory to store my sample files in.
+
+write(blogs1, "sample/sample_blogs.txt") #storing my sample files.
+write(news1, "sample/sample_news.txt")
+write(twitter1, "sample/sample_twitter.txt")
+
+sample <- c(blogs1, news1, twitter1) #a total sample variable, that will be used in the next step for cleaning data.
+```
+
+
+## Tokenizing and Filtering the Data
+
+Here, I will filter my data for profanity, and create a function that tokenizes my data.
+
+```{r, comment=""}
+sample2 <- as.list(sample) 
+sample3 <- lapply(sample2, tolower) #transforming all text to lowercase.
+sample3b <- as.character(sample3) 
+sample4 <- removePunctuation(sample3b) #removing punctuation from text.
+sample5 <- removeNumbers(sample4) #removing numbers from text.
+
+text_df <- tibble(line = 1:length(sample5), text = sample5) 
+ 
+
+tidy_sample <- text_df %>%
+  unnest_tokens(word, text) %>% #tokenizing the cleaned data.
+  anti_join(stop_words) #removing common stop words.
+
+sample_wordcounts <- tidy_sample %>%
+  count(word, sort = TRUE) #checking the most common word counts after data cleanup.
+```
+
+
+## Exploring the Data
+
+In this section, I will explore my imported data files to establish parameters and key variables that will be used for model building later. Exploration will be done in numerous ways, including visual demonstrations of characteristics of the data.
+
+Below, I am building a histogram to portray the total word counts for the top 20 most common words found in our sample.
+From this, we can see that there are a few words that are counted much more than others.
+
+```{r, comment="", echo=TRUE}
+histogram1 <- ggplot(head(sample_wordcounts,20), aes(x=word, y=n)) +
+  geom_bar(stat="Identity", fill="red") +
+  ggtitle("Word Counts Histogram") +
+  ylab("Count") +
+  xlab("Word") #creating a histogram.
+
+histogram1 #printing histogram plot.
+```
+
+Now, I will plot histograms for 2-gram and 3-gram word phrase counts.
+
+```{r, comment="", echo=TRUE}
+twogram <- tokenize_ngrams(sample3b, n = 2) #creating a 2-gram list.
+threegram <- tokenize_ngrams(sample3b, n=3) #creating a 3-gram list.
+
+tidy_twogram <- text_df %>%
+  unnest_tokens(bigram, text, token="ngrams", n=2) #tokenizing the cleaned data.
+  
+twogram_counts <- tidy_twogram %>%
+  count(bigram, sort = TRUE)
+
+head(twogram_counts, 10)
+
+tidy_threegram <- text_df %>%
+  unnest_tokens(trigram, text, token="ngrams", n=3) #tokenizing the cleaned data.
+  
+threegram_counts <- tidy_threegram %>%
+  count(trigram, sort = TRUE)
+
+head(threegram_counts, 10)
+```
+
+The Histograms:
+
+```{r, comment="", echo=TRUE}
+histogram2 <- ggplot(head(twogram_counts,10), aes(x=bigram, y=n)) +
+  geom_bar(stat="Identity", fill="blue") +
+  ggtitle("Bigram Counts Histogram") +
+  ylab("Count") +
+  xlab("Phrase") #creating a histogram.
+
+histogram2 #printing histogram plot.
+
+
+histogram3 <- ggplot(head(threegram_counts,10), aes(x=trigram, y=n)) +
+  geom_bar(stat="Identity", fill="orange") +
+  ggtitle("Trigram Counts Histogram") +
+  ylab("Count") +
+  xlab("Phrase") #creating a histogram.
+
+histogram3 #printing histogram plot.
+```
+
+
+This marks the end of my exploratory analysis, and the completion of the Milestone Report. 
+03/10/2023.
+
+
+
